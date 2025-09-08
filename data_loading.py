@@ -4,13 +4,9 @@ import pandas as pd
 
 class EmotionDatasetPreparer:
     def __init__(self, datasets: dict):
-        """
-        Args:
-            datasets (dict): Mapping of dataset_name -> dataset_path
-        """
         self.datasets = datasets
 
-        # Emotion label maps for standardization
+        # Emotion label maps
         self.ravdess_map = {
             '01': 'neutral', '02': 'calm', '03': 'happy', '04': 'sad',
             '05': 'angry', '06': 'fearful', '07': 'disgust', '08': 'surprised'
@@ -25,7 +21,6 @@ class EmotionDatasetPreparer:
         }
 
     def generate_csvs(self):
-        """Generate individual DataFrames for each dataset."""
         dfs = {}
 
         for dataset_name, dataset_path in self.datasets.items():
@@ -36,33 +31,29 @@ class EmotionDatasetPreparer:
                         continue
                     filepath = os.path.join(root, file)
 
+                    emotion = "unknown"
                     # RAVDESS
                     if dataset_name == "RAVDESS":
                         parts = file.split('-')
                         if len(parts) == 7:
                             emotion = self.ravdess_map.get(parts[2], "unknown")
-
                     # CREMA-D
                     elif dataset_name == "CREMA-D":
                         parts = file.split('_')
-                        emotion = self.crema_map.get(parts[2], "unknown") if len(parts) >= 3 else "unknown"
-
+                        if len(parts) >= 3:
+                            emotion = self.crema_map.get(parts[2], "unknown")
                     # TESS
                     elif dataset_name == "TESS":
                         emotion = os.path.basename(root).lower()
-
                     # EmoDB
                     elif dataset_name == "EmoDB":
                         emotion = self.emodb_map.get(file[5], "unknown")
-
                     # IESC
                     elif dataset_name == "IESC":
                         emotion = os.path.basename(root).lower()
 
-                    else:
-                        continue
-
-                    data.append([filepath, emotion])
+                    if emotion != "unknown":
+                        data.append([filepath, emotion.lower()])
 
             if data:
                 dfs[dataset_name] = pd.DataFrame(data, columns=['file_path', 'emotion'])
@@ -70,13 +61,10 @@ class EmotionDatasetPreparer:
         return dfs
 
     def merge_and_clean(self, dfs: dict):
-        """Merge all DataFrames and clean emotion labels."""
         df = pd.concat(dfs.values(), ignore_index=True)
 
-        # Remove prefixes like oaf_ or yaf_
-        df['emotion'] = df['emotion'].str.replace(r'^(oaf_|yaf_)', '', regex=True)
-
-        # Normalize emotion labels
+        # Clean labels
+        df['emotion'] = df['emotion'].str.replace(r'^(oaf_|yaf_)', '', regex=True).str.lower()
         df['emotion'] = df['emotion'].replace({
             'pleasant_surprised': 'surprised',
             'pleasant_surprise': 'surprised',
@@ -87,4 +75,6 @@ class EmotionDatasetPreparer:
             'anger': 'angry'
         })
 
+        df = df[df['emotion'] != "unknown"].reset_index(drop=True)
+        df.to_csv("cleaned_data.csv")
         return df
